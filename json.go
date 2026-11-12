@@ -7,6 +7,7 @@ import (
 	"io"
 	"reflect"
 	"strings"
+	"unicode/utf8"
 )
 
 const maxJSONBytes = 8 << 20
@@ -20,6 +21,9 @@ func decodeStrict(reader io.Reader, output any) error {
 	}
 	if len(data) > maxJSONBytes {
 		return fmt.Errorf("JSON exceeds the 8 MiB input limit")
+	}
+	if !utf8.Valid(data) {
+		return fmt.Errorf("JSON contains invalid UTF-8")
 	}
 	scanner := json.NewDecoder(bytes.NewReader(data))
 	scanner.UseNumber()

@@ -61,7 +61,17 @@ func NewPlan(options PlanOptions) (Plan, error) {
 	}
 	plan := Plan{Version: 1, Commit: options.Commit, Environment: options.Environment, Coverage: options.Coverage, Files: files, Allocation: allocation, HistorySources: sources}
 	plan.Checksum, err = plan.checksum()
-	return plan, err
+	if err != nil {
+		return Plan{}, err
+	}
+	data, err := json.Marshal(plan)
+	if err != nil {
+		return Plan{}, err
+	}
+	if len(data)+1 > maxJSONBytes {
+		return Plan{}, fmt.Errorf("assignment exceeds the 8 MiB input limit workers can read; reduce the suite size")
+	}
+	return plan, nil
 }
 
 func ReadPlan(reader io.Reader) (Plan, error) {

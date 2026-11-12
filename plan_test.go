@@ -3,6 +3,7 @@ package balance
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -98,5 +99,16 @@ func TestEmptySelectedPlanRoundTripsWithoutWorkers(t *testing.T) {
 	}
 	if plan.Allocation.HasTests || len(plan.Allocation.Shards) != 0 {
 		t.Fatal("empty selection must not create workers")
+	}
+}
+
+func TestPlanRejectsAssignmentsTooLargeForWorkersToRead(t *testing.T) {
+	files := make([]string, 40000)
+	for i := range files {
+		files[i] = fmt.Sprintf("test/%s/%05d_test.rb", strings.Repeat("x", 100), i)
+	}
+	_, err := NewPlan(PlanOptions{Files: files, Shards: 2, Coverage: "full", Environment: "linux", Commit: testCommit})
+	if err == nil || !strings.Contains(err.Error(), "8 MiB") {
+		t.Fatalf("oversized assignment must fail before publication: %v", err)
 	}
 }

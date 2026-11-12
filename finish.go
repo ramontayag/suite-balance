@@ -158,7 +158,11 @@ func finishSummary(plan Plan, receipts map[int]Receipt, result FinishResult) str
 	reported := 0
 	totals := []float64{}
 	largest, largestFile := 0.0, ""
+	activeShards := 0
 	for index, shard := range plan.Allocation.Shards {
+		if len(shard.Files) > 0 {
+			activeShards++
+		}
 		receipt, exists := receipts[index]
 		total := 0.0
 		for file, fileResult := range receipt.Report.Files {
@@ -186,9 +190,11 @@ func finishSummary(plan Plan, receipts map[int]Receipt, result FinishResult) str
 		fmt.Fprintf(&out, "| %d | %d | %s | %s |\n", index, len(shard.Files), predicted, actual)
 	}
 	fmt.Fprintf(&out, "\nCoverage: **%d / %d** files reported.\n", reported, len(plan.Files))
-	if len(totals) > 0 && reported == len(plan.Files) {
+	if len(totals) > 0 && len(totals) == activeShards && reported == len(plan.Files) {
 		slices.Sort(totals)
 		fmt.Fprintf(&out, "\nActual spread: **%.2fs**.\n", totals[len(totals)-1]-totals[0])
+	} else if activeShards > 0 {
+		out.WriteString("\nActual spread unavailable: one or more shard totals are incomplete or exceed the numeric range.\n")
 	}
 	if largestFile != "" {
 		fmt.Fprintf(&out, "\nLargest file: %s (%.2fs). A whole-file assignment cannot finish faster than its slowest file.\n", markdown(largestFile), largest)

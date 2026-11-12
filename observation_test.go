@@ -112,3 +112,18 @@ func TestHistoryRejectsDifferentCommitsForAttemptsOfOneRun(t *testing.T) {
 		t.Fatal("one workflow run must have one tested commit")
 	}
 }
+
+func TestHistoryRejectsConflictingDocumentsForTheSameRunAttempt(t *testing.T) {
+	for _, files := range []map[string]FileResult{
+		{"test/a": {20, "passed"}},
+		{"test/b": {10, "passed"}},
+	} {
+		a, b := observation(), observation()
+		b.Files = files
+		for _, inputs := range [][]Observation{{a, b}, {b, a}} {
+			if _, _, err := BuildHistory(inputs, "linux-standard"); err == nil {
+				t.Fatal("conflicting immutable observations must fail in either arrival order")
+			}
+		}
+	}
+}

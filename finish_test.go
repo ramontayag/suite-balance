@@ -3,6 +3,7 @@ package balance
 import (
 	"bytes"
 	"encoding/json"
+	"math"
 	"strings"
 	"testing"
 )
@@ -104,5 +105,47 @@ func TestFinishEmptySelectedRunSucceedsWithoutReceipts(t *testing.T) {
 	result := Finish(plan, s, nil, nil)
 	if len(result.Issues) != 0 || result.Observation != nil || !strings.Contains(result.Summary, "No tests selected") {
 		t.Fatalf("unexpected empty selection result: %+v", result)
+	}
+}
+
+func TestFinishPreservesPassingFilesInAPartiallyReportedShard(t *testing.T) {
+	plan := makePlan(t, []string{"test/a", "test/b", "test/c"}, "full")
+	a := makeReceipt(t, plan, 0, map[string]FileResult{"test/a": {12, "passed"}})
+	b := makeReceipt(t, plan, 1, map[string]FileResult{"test/b": {7, "passed"}})
+	result := Finish(plan, source(), []Receipt{a, b}, nil)
+	if len(result.Issues) == 0 || result.Observation == nil || len(result.Observation.Files) != 2 {
+		t.Fatalf("partial coverage must fail without losing valid observations: %+v", result)
+	}
+	if result.Observation.Files["test/a"].Seconds != 12 || !strings.Contains(result.Summary, "2 / 3") || !strings.Contains(result.Summary, "incomplete") {
+		t.Fatalf("partial coverage summary/history incorrect: %+v", result)
+	}
+}
+
+func TestFinishRejectsInvalidSourceAndTamperedPlans(t *testing.T) {
+	for _, mutate := range []func(*Plan, *Source){
+		func(_ *Plan, s *Source) { s.Commit = strings.Repeat("b", 40) },
+		func(_ *Plan, s *Source) { s.Environment = "different" },
+		func(_ *Plan, s *Source) { s.Coverage = "selected" },
+		func(_ *Plan, s *Source) { s.RunID = 0 },
+		func(p *Plan, _ *Source) { p.Checksum = "wrong" },
+	} {
+		plan := makePlan(t, []string{"test/a"}, "full")
+		r := makeReceipt(t, plan, 0, map[string]FileResult{"test/a": {10, "passed"}})
+		s := source()
+		mutate(&plan, &s)
+		result := Finish(plan, s, []Receipt{r}, nil)
+		if len(result.Issues) == 0 || result.Observation != nil || result.Summary == "" {
+			t.Fatalf("invalid provenance must fail visibly without publication: %+v", result)
+		}
+	}
+}
+
+func TestSummaryDoesNotReportSpreadFromOnlySomeShardTotals(t *testing.T) {
+	plan := makePlan(t, []string{"test/a", "test/b", "test/c"}, "full")
+	a := makeReceipt(t, plan, 0, map[string]FileResult{"test/a": {math.MaxFloat64, "passed"}, "test/c": {math.MaxFloat64, "passed"}})
+	b := makeReceipt(t, plan, 1, map[string]FileResult{"test/b": {1, "passed"}})
+	result := Finish(plan, source(), []Receipt{a, b}, nil)
+	if strings.Contains(result.Summary, "Actual spread: **") || !strings.Contains(result.Summary, "Actual spread unavailable") {
+		t.Fatalf("summary must not compute spread from only the finite shard total: %s", result.Summary)
 	}
 }
