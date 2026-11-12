@@ -59,8 +59,12 @@ func (r Receipt) validate(plan Plan, runID, attempt uint64) error {
 	if r.Shard < 0 || r.Shard >= len(plan.Allocation.Shards) || r.Report.Version != 1 || r.Report.Files == nil {
 		return fmt.Errorf("receipt has invalid shard or report version")
 	}
+	assigned := make(map[string]bool, len(plan.Allocation.Shards[r.Shard].Files))
+	for _, file := range plan.Allocation.Shards[r.Shard].Files {
+		assigned[file] = true
+	}
 	for file, result := range r.Report.Files {
-		if !slices.Contains(plan.Allocation.Shards[r.Shard].Files, file) {
+		if !assigned[file] {
 			return fmt.Errorf("shard %d reported unassigned file %q", r.Shard, file)
 		}
 		if result.Status != "passed" && result.Status != "failed" {

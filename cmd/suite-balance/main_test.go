@@ -124,6 +124,17 @@ func TestHistoryInputHasAnAggregateSizeLimit(t *testing.T) {
 	}
 }
 
+func TestPlanRejectsCheckoutFromAnotherCommitEvenWhenFilesMatch(t *testing.T) {
+	f := newFixture(t, map[string]string{"test/a": "sample"})
+	command := exec.Command("git", "-C", f.root, "commit", "--allow-empty", "-qm", "another checkout")
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("create second commit: %v: %s", err, output)
+	}
+	if err := validateCommitted(f.root, f.commit, []string{"test/a"}); err == nil || !strings.Contains(err.Error(), "checkout") {
+		t.Fatalf("a matching file list must not hide a different tested checkout: %v", err)
+	}
+}
+
 type cliFixture struct {
 	t            *testing.T
 	root, commit string

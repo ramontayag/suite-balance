@@ -487,6 +487,13 @@ func readManifest(path string) ([]string, error) {
 	return files, nil
 }
 func validateCommitted(root, commit string, files []string) error {
+	head, err := exec.Command("git", "-C", root, "rev-parse", "--verify", "HEAD").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("cannot verify tested checkout: %w", err)
+	}
+	if strings.TrimSpace(string(head)) != commit {
+		return fmt.Errorf("checkout HEAD does not match tested commit %s", commit)
+	}
 	cmd := exec.Command("git", "-C", root, "ls-tree", "-r", "-z", commit)
 	listing, err := cmd.CombinedOutput()
 	if err != nil {
