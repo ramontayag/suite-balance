@@ -107,6 +107,26 @@ func TestFinishOutputsCannotBeInsideReceiptDirectory(t *testing.T) {
 	}
 }
 
+func TestFinishProtectsUncreatedReceiptDirectoriesUnderSymlinkedAncestors(t *testing.T) {
+	base := t.TempDir()
+	real := filepath.Join(base, "real")
+	if err := os.Mkdir(real, 0700); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(base, "alias")
+	if err := os.Symlink(real, alias); err != nil {
+		t.Fatal(err)
+	}
+	reports := filepath.Join(alias, "reports")
+	summary := filepath.Join(reports, "summary.md")
+	if err := checkFinishOutputCollisions(summary, filepath.Join(base, "observation.json"), filepath.Join(base, "plan.json"), filepath.Join(base, "source.json"), reports, nil); err == nil {
+		t.Fatal("an unresolved ancestor must not hide a summary inside receipt inputs")
+	}
+	if got, want := canonicalPath(filepath.Join(alias, "missing", "reports", "summary.md")), filepath.Join(real, "missing", "reports", "summary.md"); got != want {
+		t.Fatalf("got %q, want resolved existing ancestor %q", got, want)
+	}
+}
+
 func TestHistoryInputHasAnAggregateSizeLimit(t *testing.T) {
 	dir := t.TempDir()
 	for i := 0; i < 17; i++ {

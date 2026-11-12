@@ -650,14 +650,20 @@ func canonicalPath(path string) string {
 	if err != nil {
 		return filepath.Clean(path)
 	}
-	if resolved, err := filepath.EvalSymlinks(absolute); err == nil {
-		return filepath.Clean(resolved)
+	ancestor := absolute
+	for {
+		if resolved, err := filepath.EvalSymlinks(ancestor); err == nil {
+			suffix, err := filepath.Rel(ancestor, absolute)
+			if err == nil {
+				return filepath.Join(resolved, suffix)
+			}
+		}
+		parent := filepath.Dir(ancestor)
+		if parent == ancestor {
+			return absolute
+		}
+		ancestor = parent
 	}
-	parent := filepath.Dir(absolute)
-	if resolved, err := filepath.EvalSymlinks(parent); err == nil {
-		parent = resolved
-	}
-	return filepath.Join(parent, filepath.Base(absolute))
 }
 func trailingNewline(files []string) string {
 	if len(files) == 0 {
