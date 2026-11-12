@@ -113,6 +113,10 @@ func TestFinishProtectsUncreatedReceiptDirectoriesUnderSymlinkedAncestors(t *tes
 	if err := os.Mkdir(real, 0700); err != nil {
 		t.Fatal(err)
 	}
+	resolvedReal, err := filepath.EvalSymlinks(real)
+	if err != nil {
+		t.Fatal(err)
+	}
 	alias := filepath.Join(base, "alias")
 	if err := os.Symlink(real, alias); err != nil {
 		t.Fatal(err)
@@ -122,7 +126,7 @@ func TestFinishProtectsUncreatedReceiptDirectoriesUnderSymlinkedAncestors(t *tes
 	if err := checkFinishOutputCollisions(summary, filepath.Join(base, "observation.json"), filepath.Join(base, "plan.json"), filepath.Join(base, "source.json"), reports, nil); err == nil {
 		t.Fatal("an unresolved ancestor must not hide a summary inside receipt inputs")
 	}
-	if got, want := canonicalPath(filepath.Join(alias, "missing", "reports", "summary.md")), filepath.Join(real, "missing", "reports", "summary.md"); got != want {
+	if got, want := canonicalPath(filepath.Join(alias, "missing", "reports", "summary.md")), filepath.Join(resolvedReal, "missing", "reports", "summary.md"); got != want {
 		t.Fatalf("got %q, want resolved existing ancestor %q", got, want)
 	}
 }
