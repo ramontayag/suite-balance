@@ -1,0 +1,39 @@
+name: Suite Balance plan
+description: Assign committed test files across workers using verified timing history
+inputs:
+  token:
+    description: GitHub token with contents and actions read permissions
+    default: ${{ github.token }}
+  suite:
+    description: Unique identifier when a workflow has multiple suites
+    default: tests
+  version:
+    description: Suite Balance release binary version
+    default: v1.0.0
+  binary-path:
+    description: Absolute path to an existing executable instead of downloading a release
+  files:
+    description: Glob matching repository-relative committed test files
+  files-from:
+    description: Path to a newline manifest (use instead of files)
+  shards:
+    description: Maximum number of workers (1 to 256)
+    default: '3'
+  coverage:
+    description: full suite or selected subset
+    default: full
+  environment:
+    description: Identifier for comparable runner capacity and configuration
+    required: true
+outputs:
+  matrix:
+    description: JSON strategy matrix containing nonempty zero-based shard indices
+  has-tests:
+    description: Whether any selected test files need execution
+  checksum:
+    description: Immutable plan checksum
+  fallback-reason:
+    description: Why timing history was not used (empty when compatible history was consumed)
+runs:
+  using: node24
+  main: ../dist/plan.js

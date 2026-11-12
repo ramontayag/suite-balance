@@ -52,7 +52,7 @@ jobs:
       matrix: ${{ steps.balance.outputs.matrix }}
       has-tests: ${{ steps.balance.outputs.has-tests }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ramontayag/suite-balance/plan@v1
         id: balance
         with:
@@ -71,7 +71,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Install your language runtime and test dependencies here.
       - uses: ramontayag/suite-balance/shard@v1
         id: balance
@@ -98,16 +98,32 @@ Use the `test` and `finish` jobs as required checks. `finish` checks reports eve
 ### What the actions do
 
 - **`plan`** reads required files from your pattern or manifest, checks that they belong to the tested commit, downloads eligible history once, and publishes one assignment. Its matrix contains zero-based shard indices. Its `has-tests` output tells the workflow whether to start workers.
-- **`shard`** downloads that assignment and returns a **manifest file path**, not a string of shell arguments. Its post step uploads the timing report and execution status, including after test failures.
+- **`shard`** downloads that assignment and returns a **manifest file path**, not a string of shell arguments. Its post step uploads the timing report and assignment metadata, including after test failures.
 - **`finish`** checks that all expected shards and files reported, writes the job summary, and publishes eligible timing observations. Missing, duplicate, or invalid results fail this check.
 
 No separate artifact steps, shared service, or repository token secret are needed. The actions use the workflow's GitHub token. Release binaries are checksum-verified. Pin action references to commit SHAs when your repository requires immutable dependencies.
 
 `environment` names a comparable runner setup. Change it when runner capacity or other material execution conditions change. Do not use the same name for different runner classes.
 
+The actions support Linux and macOS runners on Intel/AMD and ARM64. They download the executable automatically; Suite Balance itself needs no Go installation. Your tests still need their own runtime and dependencies.
+
 Use either `files` for a pattern or `files-from` for a manifest containing one repository-relative path per line. For a selected subset, also set `coverage: selected`. Suite Balance divides the selected files among workers and checks that each file was reported exactly once; it does not change which files your selector requires. Selected runs can read timing history but do not update it.
 
 An empty selected list is valid. For example, a documentation-only change may need no system tests. No workers start, `finish` reports "No tests selected," and history stays unchanged. An empty full-suite input or a missing or unreadable manifest is an error, not a request to skip tests.
+
+### Optional inputs
+
+| Input | Action | Default | Use |
+| --- | --- | --- | --- |
+| `coverage` | `plan` | `full` | Set `selected` when another step chooses a subset. |
+| `suite` | All three | `tests` | Give each suite a distinct name when one workflow balances multiple suites. Use the same name in its three actions. |
+| `retention-days` | `finish` | `30` | Retain timing history for this many days, within your repository's artifact-retention limit. |
+| `version` | All three | `v1.0.0` | Choose the executable release. |
+| `binary-path` | All three | Automatic download | Use an existing executable at an absolute path. |
+
+The `plan` action also outputs `fallback-reason`: an empty string when it uses historical estimates, or an explanation when it uses round-robin.
+
+Suite Balance accepts 1–256 shards. Manifests and JSON documents are limited to 8 MiB each, and a preparation can restore up to 128 MiB of timing history. Exceeding the history limit produces a visible round-robin fallback. Oversized required inputs or result documents fail validation.
 
 ## Report durations
 
@@ -164,7 +180,7 @@ The same files, history, and shard count produce the same assignment. Files stay
 
 ### History you can trust
 
-The GitHub Actions integration learns from complete, passing files in full-suite runs on the default branch. A full-suite run is one intended to run every required file; it does not mean every file passed. A passing file can contribute an observation even if another file, a later step, or another job fails. Failed or incomplete files do not contribute observations.
+The GitHub Actions integration learns from complete, passing files in full-suite push runs on the default branch. A full-suite run is one intended to run every required file; it does not mean every file passed. A passing file can contribute an observation even if another file, a later step, or another job fails. Failed or incomplete files do not contribute observations.
 
 Each observation must come from a valid report for that file's assignment and tested commit. Publishing an eligible observation does not make an incomplete or failed run pass its required checks. Pull requests and selected runs can read history but cannot publish authoritative observations.
 

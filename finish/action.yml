@@ -1,0 +1,20 @@
+name: Suite Balance finish
+description: Validate shard results and publish eligible passing-file timing history
+inputs:
+  token:
+    description: GitHub token with contents and actions read permissions
+    default: ${{ github.token }}
+  suite:
+    description: Suite identifier matching the plan action
+    default: tests
+  version:
+    description: Suite Balance release binary version
+    default: v1.0.0
+  binary-path:
+    description: Absolute path to an existing executable instead of downloading a release
+  retention-days:
+    description: History artifact retention (subject to repository limits)
+    default: '30'
+runs:
+  using: node24
+  main: ../dist/finish.js

@@ -1,0 +1,133 @@
+name: Actions end-to-end
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      use-release:
+        description: Download and checksum-verify the published binary instead of building it
+        type: boolean
+        default: false
+      expect-history:
+        description: Require historical timings rather than a fallback assignment
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.balance.outputs.matrix }}
+      has-tests: ${{ steps.balance.outputs.has-tests }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - if: ${{ !inputs.use-release }}
+        run: go build -o "$RUNNER_TEMP/suite-balance" ./cmd/suite-balance
+      - uses: ./plan
+        id: balance
+        with:
+          files: testdata/suite/*.case.json
+          shards: 2
+          environment: ubuntu-24.04-standard
+          binary-path: ${{ !inputs.use-release && format('{0}/suite-balance', runner.temp) || '' }}
+      - name: Require restored history
+        if: ${{ inputs.expect-history }}
+        env:
+          FALLBACK_REASON: ${{ steps.balance.outputs.fallback-reason }}
+        run: test -z "$FALLBACK_REASON"
+
+  test:
+    needs: plan
+    if: ${{ needs.plan.outputs.has-tests == 'true' }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - if: ${{ !inputs.use-release }}
+        run: go build -o "$RUNNER_TEMP/suite-balance" ./cmd/suite-balance
+      - uses: ./shard
+        id: balance
+        with:
+          index: ${{ matrix.shard }}
+          timings: tmp/timings.json
+          binary-path: ${{ !inputs.use-release && format('{0}/suite-balance', runner.temp) || '' }}
+      - name: Run synthetic fixture files
+        env:
+          TEST_FILES: ${{ steps.balance.outputs.files }}
+        run: node testdata/run-fixtures.mjs "$TEST_FILES" tmp/timings.json
+
+  finish:
+    needs: [plan, test]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - if: ${{ !inputs.use-release }}
+        run: go build -o "$RUNNER_TEMP/suite-balance" ./cmd/suite-balance
+      - uses: ./finish
+        with:
+          binary-path: ${{ !inputs.use-release && format('{0}/suite-balance', runner.temp) || '' }}
+
+  empty-plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.balance.outputs.matrix }}
+      has-tests: ${{ steps.balance.outputs.has-tests }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - if: ${{ !inputs.use-release }}
+        run: go build -o "$RUNNER_TEMP/suite-balance" ./cmd/suite-balance
+      - run: touch "$RUNNER_TEMP/selected-tests.txt"
+      - uses: ./plan
+        id: balance
+        with:
+          suite: empty-selection
+          files-from: ${{ runner.temp }}/selected-tests.txt
+          coverage: selected
+          environment: ubuntu-24.04-standard
+          binary-path: ${{ !inputs.use-release && format('{0}/suite-balance', runner.temp) || '' }}
+
+  empty-test:
+    needs: empty-plan
+    if: ${{ needs.empty-plan.outputs.has-tests == 'true' }}
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix: ${{ fromJSON(needs.empty-plan.outputs.matrix) }}
+    steps:
+      - run: exit 1 # An empty selection must never start a worker.
+
+  empty-finish:
+    needs: [empty-plan, empty-test]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - if: ${{ !inputs.use-release }}
+        run: go build -o "$RUNNER_TEMP/suite-balance" ./cmd/suite-balance
+      - uses: ./finish
+        with:
+          suite: empty-selection
+          binary-path: ${{ !inputs.use-release && format('{0}/suite-balance', runner.temp) || '' }}

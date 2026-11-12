@@ -1,0 +1,30 @@
+name: Suite Balance shard
+description: Retrieve one assignment and publish its timing report after tests finish
+inputs:
+  token:
+    description: GitHub token with actions read permissions
+    default: ${{ github.token }}
+  suite:
+    description: Suite identifier matching the plan action
+    default: tests
+  version:
+    description: Suite Balance release binary version
+    default: v1.0.0
+  binary-path:
+    description: Absolute path to an existing executable instead of downloading a release
+  index:
+    description: Zero-based shard index from the plan matrix
+    required: true
+  timings:
+    description: Fresh timing report path written by your test runner
+    required: true
+outputs:
+  files:
+    description: Absolute path to this shard's newline manifest
+  checksum:
+    description: Immutable plan checksum
+runs:
+  using: node24
+  main: ../dist/shard.js
+  post: ../dist/shard-post.js
+  post-if: always()
